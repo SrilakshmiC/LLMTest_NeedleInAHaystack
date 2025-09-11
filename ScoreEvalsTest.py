@@ -2,7 +2,6 @@ import glob
 import os
 import random
 import re
-from anthropic import Anthropic
 import nest_asyncio
 from phoenix.evals import (
     OpenAIModel,
@@ -27,6 +26,7 @@ class LLMNumericScoreEvalTester:
 
         # model_provider = "Qwen",
         # model_name = "together_ai/Qwen/Qwen2.5-7B-Instruct-Turbo",
+        # model_name = "fireworks/accounts/fireworks/models/qwen3-235b-a22b-instruct-250",
         
         # model_provider = "Anthropic",
         # model_name = "claude-opus-4-20250514",
@@ -41,7 +41,7 @@ class LLMNumericScoreEvalTester:
         # model_name = "mistral/mistral-medium",
         
         error_mode="frustration", 
-        eval_score_range="A_to_E",
+        eval_score_range="1_to_10",
         number_of_runs_per_context_length=2,  
         target_context_length=5000,
         document_error_percent_min=0,
@@ -230,36 +230,25 @@ class LLMNumericScoreEvalTester:
                 model = OpenAIModel(model="gpt-4", temperature=1.0)
                 template = simple_template
         elif self.model_provider == "Qwen":
-            try:
-                # Allow either "together_ai/Qwen/..." or bare "Qwen/..."
-                together_model = self.model_name
-                if together_model.startswith("together_ai/"):
-                    together_model = together_model.split("together_ai/")[1]
-
+            if self.model_name.startswith("fireworks/"):
+                print(f"Using Qwen via Fireworks API: {self.model_name}")
+                model = OpenAIModel(
+                    model="accounts/fireworks/models/qwen3-235b-a22b-instruct-2507",
+                    temperature=0.6,
+                    base_url="https://api.fireworks.ai/inference/v1",
+                    api_key=os.getenv("FIREWORKS_API_KEY")
+                )
+                template = simple_template
+            else:
+                together_model = self.model_name.split("together_ai/")[-1]
                 print(f"Using Qwen via Together OpenAI-compatible API with model: {together_model}")
                 model = OpenAIModel(
-                    model=together_model,        
+                    model=together_model,
                     temperature=0.0,
                     base_url="https://api.together.xyz/v1",
                     api_key=os.getenv("TOGETHER_API_KEY"),
                 )
                 template = simple_template
-            except Exception as e:
-                print(f"Error initializing Together (OpenAIModel) for Qwen {self.model_name}: {e}")
-                raise e
-        elif self.model_provider == "Mistral":
-            try:
-                print(f"Using Mistral with model: {self.model_name}")
-                model = LiteLLMModel(model_name=self.model_name, temperature=0.0)
-                # model = OpenAIModel(
-                #     model=self.model_name,
-                #     # base_url="https://api.mistral.ai/v1",
-                #     api_key=os.getenv("MISTRAL_API_KEY")
-                # )
-                template = simple_template
-            except Exception as e:
-                print(f"Error initializing Mistral model {self.model_name}: {e}")
-                raise e
 
         full_context = self.read_context_files()
         for context_length in self.context_lengths:
@@ -1019,20 +1008,20 @@ class LLMNumericScoreEvalTester:
         )
         frustration_tester.start_test()
         
-        # plt.close('all')
+        plt.close('all')
         
-        # print("\n" + "="*50)
-        # print(f"TESTING SADNESS MODE with {model_provider}:{model_name}")
-        # print("="*50)
-        # sadness_tester = LLMNumericScoreEvalTester(
-        #     error_mode="sadness",
-        #     model_provider=model_provider,
-        #     model_name=model_name,
-        #     eval_score_range=eval_score_range
-        # )
-        # sadness_tester.start_test()
+        print("\n" + "="*50)
+        print(f"TESTING SADNESS MODE with {model_provider}:{model_name}")
+        print("="*50)
+        sadness_tester = LLMNumericScoreEvalTester(
+            error_mode="sadness",
+            model_provider=model_provider,
+            model_name=model_name,
+            eval_score_range=eval_score_range
+        )
+        sadness_tester.start_test()
         
-        # plt.close('all')
+        plt.close('all')
         
         print("\n" + "="*50)
         print(f"TESTING SPELLING ERRORS MODE with {model_provider}:{model_name}")
@@ -1064,8 +1053,9 @@ if __name__ == "__main__":
 
     # MODEL_PROVIDER = "Qwen"
     # MODEL_NAME = "together_ai/Qwen/Qwen2.5-7B-Instruct-Turbo"
+    # MODEL_NAME = "fireworks/accounts/fireworks/models/qwen3-235b-a22b-instruct-250"
     
-    EVAL_SCORE_RANGE =  "A_to_E"
+    EVAL_SCORE_RANGE =  "1_to_10"
     
     ht = LLMNumericScoreEvalTester()
     ht.run_both_tests(model_provider=MODEL_PROVIDER, model_name=MODEL_NAME, eval_score_range=EVAL_SCORE_RANGE)
