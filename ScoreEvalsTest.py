@@ -54,7 +54,7 @@ class LLMNumericScoreEvalTester:
     ):
 
         self.document_error_percent_intervals = document_error_percent_intervals
-        self.haystack_dir = "LLMTest_NeedleInAHaystack/PaulGrahamEssays"
+        self.haystack_dir = "PaulGrahamEssays"
         self.print_ongoing_status = print_ongoing_status
         self.model_provider = model_provider
         self.testing_results = []
@@ -90,12 +90,6 @@ class LLMNumericScoreEvalTester:
             raise ValueError("ANTHROPIC_API_KEY must be provided or set in environment")
         if model_provider == "Mistral" and not self.mistral_api_key:
             raise ValueError("MISTRAL_API_KEY must be provided or set in environment")
-        
-        class CharTokenizer:
-            def encode(self, text): return list(text)
-            def decode(self, ids): return "".join(ids)
-            def count(self, text): return max(1, len(text) // 4)
-        self.enc = CharTokenizer()
 
         if model_provider == "OpenAI":
             self.enc = tiktoken.encoding_for_model("gpt-4")
@@ -509,7 +503,7 @@ class LLMNumericScoreEvalTester:
         print("reading context files!")
         context = ""
         max_context_length = max(self.context_lengths)
-        
+
         while self.get_context_length_in_tokens(context) < max_context_length:
             for file in glob.glob(f"{self.haystack_dir}/*.txt"):
                 with open(file, "r") as f:
@@ -1054,7 +1048,7 @@ if __name__ == "__main__":
     # MODEL_PROVIDER = "Qwen"
     # MODEL_NAME = "together_ai/Qwen/Qwen2.5-7B-Instruct-Turbo"
     # MODEL_NAME = "fireworks/accounts/fireworks/models/qwen3-235b-a22b-instruct-250"
-    
+
     EVAL_SCORE_RANGE =  "1_to_10"
     
     ht = LLMNumericScoreEvalTester()
