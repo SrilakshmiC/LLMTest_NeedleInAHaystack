@@ -6,18 +6,19 @@ import nest_asyncio
 from phoenix.evals import (
     OpenAIModel,
     AnthropicModel,
-    LiteLLMModel,
     llm_generate,
 )
-#from transformers import AutoTokenizer
+
 import tiktoken
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-import os
-os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+from phoenix.otel import register
+from openinference.instrumentation.openai import OpenAIInstrumentor
+from openinference.instrumentation.anthropic import AnthropicInstrumentor
 
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 class LLMNumericScoreEvalTester:
     def __init__(
@@ -26,19 +27,16 @@ class LLMNumericScoreEvalTester:
 
         # model_provider = "Qwen",
         # model_name = "together_ai/Qwen/Qwen2.5-7B-Instruct-Turbo",
-        # model_name = "fireworks/accounts/fireworks/models/qwen3-235b-a22b-instruct-250",
+        # model_name = "fireworks/accounts/fireworks/models/qwen3-235b-a22b-instruct-2507",
         
         # model_provider = "Anthropic",
         # model_name = "claude-opus-4-20250514",
         # model_name = "claude-sonnet-4-20250514",
 
         model_provider = "OpenAI",
-        # model_name='gpt-4',
+        model_name='gpt-4',
         # model_name='o3',
-        model_name='gpt-5-nano',
-
-        # model_provider = "Mistral",
-        # model_name = "mistral/mistral-medium",
+        # model_name='gpt-5-nano',
         
         error_mode="frustration", 
         eval_score_range="1_to_10",
@@ -49,7 +47,6 @@ class LLMNumericScoreEvalTester:
         document_error_percent_intervals=10,
         openai_api_key=None,
         anthropic_api_key=None,
-        mistral_api_key=None,
         print_ongoing_status=True,
     ):
 
@@ -76,20 +73,17 @@ class LLMNumericScoreEvalTester:
             )
         ).astype(int)
 
-        if model_provider not in ["OpenAI", "Anthropic", "Mistral", "LiteLLM", "Qwen"]:
-            raise ValueError("model_provider must be one of: OpenAI, Anthropic, Mistral, LiteLLM, Qwen")
+        if model_provider not in ["OpenAI", "Anthropic", "Qwen"]:
+            raise ValueError("model_provider must be one of: OpenAI, Anthropic, Qwen")
 
         self.openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
         self.anthropic_api_key = anthropic_api_key or os.getenv("ANTHROPIC_API_KEY")
-        self.mistral_api_key = mistral_api_key or os.getenv("MISTRAL_API_KEY")
         self.model_name = model_name
 
         if model_provider == "OpenAI" and not self.openai_api_key:
             raise ValueError("OPENAI_API_KEY must be provided or set in environment")
         if model_provider == "Anthropic" and not self.anthropic_api_key:
             raise ValueError("ANTHROPIC_API_KEY must be provided or set in environment")
-        if model_provider == "Mistral" and not self.mistral_api_key:
-            raise ValueError("MISTRAL_API_KEY must be provided or set in environment")
 
         if model_provider == "OpenAI":
             self.enc = tiktoken.encoding_for_model("gpt-4")
@@ -97,11 +91,6 @@ class LLMNumericScoreEvalTester:
         elif model_provider == "Anthropic":
             self.enc = tiktoken.encoding_for_model("gpt-4")
             self.max_model_tokens = 200_000
-        elif model_provider == "LiteLLM":
-            self.enc = tiktoken.encoding_for_model("gpt-4")
-        elif model_provider == "Mistral":
-            self.enc = tiktoken.encoding_for_model("gpt-4")
-            self.max_model_tokens = 32_000
         elif model_provider == "Qwen":
             self.enc = tiktoken.encoding_for_model("gpt-4")
             self.max_model_tokens = 32_768
@@ -213,16 +202,6 @@ class LLMNumericScoreEvalTester:
         elif self.model_provider == "Anthropic":
             model = AnthropicModel(model=self.model_name)
             template = simple_template
-        elif self.model_provider == "LiteLLM":
-            try:
-                print(f"Using LiteLLM with model: {self.model_name}")
-                model = LiteLLMModel(model_name=self.model_name, temperature=0.0)
-                template = simple_template
-            except Exception as e:
-                print(f"Error initializing LiteLLM model {self.model_name}: {e}")
-                print("Falling back to GPT-4")
-                model = OpenAIModel(model="gpt-4", temperature=1.0)
-                template = simple_template
         elif self.model_provider == "Qwen":
             if self.model_name.startswith("fireworks/"):
                 print(f"Using Qwen via Fireworks API: {self.model_name}")
@@ -986,8 +965,6 @@ class LLMNumericScoreEvalTester:
             elif model_provider == "Anthropic":
                 model_name = "claude-opus-4-20250514"
                 # model_name = "claude-sonnet-4-20250514",
-            elif model_provider == "Mistral":
-                model_name = "mistral/mistral-medium"
             elif model_provider == "Qwen":
                 model_name = "together_ai/Qwen/Qwen2.5-7B-Instruct-Turbo"
         
@@ -1037,8 +1014,8 @@ if __name__ == "__main__":
     EVAL_SCORE_RANGE = "1_to_10", "0_to_1", "-1_to_1", "A_to_E" '''
     
     MODEL_PROVIDER = "OpenAI"
-    # MODEL_NAME = "gpt-4"
-    MODEL_NAME = "gpt-5-nano"
+    MODEL_NAME = "gpt-4"
+    # MODEL_NAME = "gpt-5-nano"
     # MODEL_NAME = "o3"
 
     # MODEL_PROVIDER = "Anthropic"
@@ -1047,9 +1024,15 @@ if __name__ == "__main__":
 
     # MODEL_PROVIDER = "Qwen"
     # MODEL_NAME = "together_ai/Qwen/Qwen2.5-7B-Instruct-Turbo"
-    # MODEL_NAME = "fireworks/accounts/fireworks/models/qwen3-235b-a22b-instruct-250"
+    # MODEL_NAME = "fireworks/accounts/fireworks/models/qwen3-235b-a22b-instruct-2507"
 
     EVAL_SCORE_RANGE =  "1_to_10"
+    project_name = "Binary vs Eval Score Test:"
+
+    tracer_provider = register(project_name=project_name, auto_instrument=True)
+    tracer = tracer_provider.get_tracer(__name__)
+    OpenAIInstrumentor().instrument(tracer_provider=tracer_provider)
+    AnthropicInstrumentor().instrument(tracer_provider=tracer_provider)
     
     ht = LLMNumericScoreEvalTester()
     ht.run_both_tests(model_provider=MODEL_PROVIDER, model_name=MODEL_NAME, eval_score_range=EVAL_SCORE_RANGE)
